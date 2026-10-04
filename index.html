@@ -1277,13 +1277,32 @@ ${word.sentenceTrans
 
       const confirmed = window.confirm(`Bạn có chắc muốn xóa "${currentDay.title}" cùng toàn bộ từ vựng trong ngày này không?`);
       if (confirmed) {
+        // ✅ BẬT CỜ TRƯỚC khi sửa appData
+        isPushing = true;
+
+        // Xóa ngày khỏi appData
         appData[currentLang].days = days.filter(d => d.id !== currentDayId);
         currentDayId = appData[currentLang].days[0].id;
         saveDataLocal();
 
+        // Cập nhật UI ngay
         renderUI();
-        pushToFirebase();
-        showToast('Đã xóa ngày được chọn!');
+        showToast('Đã xóa ngày, đang đồng bộ...');
+
+        // ✅ Push lên Firebase rồi MỚI tắt cờ
+        DATA_REF.set(appData)
+          .then(() => {
+            console.log('✅ Đã xóa ngày trên Firebase');
+            // Đợi 1 giây trước khi tắt cờ để chắc chắn listener không ghi đè
+            setTimeout(() => {
+              isPushing = false;
+            }, 1000);
+          })
+          .catch((err) => {
+            console.error('❌ Lỗi xóa ngày:', err);
+            isPushing = false;
+            showToast('Lỗi đồng bộ, thử lại!', false);
+          });
       }
     }
 
