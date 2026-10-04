@@ -3,7 +3,8 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="theme-color" content="#FAF8F5">
   <title>VocaNotes - Sổ Tay Từ Vựng Hàng Ngày</title>
   <!-- Firebase SDK v9 (compat version để dùng cực kỳ đơn giản) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -90,6 +91,83 @@
     .sync-dot {
       animation: pulse-dot 1.5s ease-in-out infinite;
     }
+    /* ============ RESPONSIVE BASE ============ */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (max-width: 640px) {
+  html { font-size: 15px; }
+}
+
+@media (max-width: 400px) {
+  html { font-size: 14px; }
+}
+
+@media (min-width: 1920px) {
+  html { font-size: 18px; }
+}
+
+body {
+  min-height: 100dvh; /* Mobile viewport height thật */
+  overflow-x: hidden;
+}
+
+/* Touch-friendly */
+button, a, input, textarea, label {
+  touch-action: manipulation;
+}
+
+/* Modal responsive — full-width bottom sheet trên mobile */
+.modal-box {
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 640px) {
+  .modal-box {
+    max-height: 95vh;
+    border-radius: 1.5rem 1.5rem 0 0;
+    margin-top: auto;
+  }
+}
+
+/* Ẩn scrollbar trên mobile cho gọn */
+@media (max-width: 640px) {
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 0;
+    width: 0;
+  }
+}
+
+/* Safe area cho iPhone notch */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+}
+
+/* Card hover chỉ khi có chuột (không phải touch) */
+@media (hover: hover) {
+  .vocab-card:hover {
+    transform: translateY(-2px);
+  }
+}
+
+/* Animation card xuất hiện */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.3s ease-out;
+}
   </style>
 </head>
 
