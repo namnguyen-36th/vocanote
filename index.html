@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VocaNotes - Sổ Tay Từ Vựng Hàng Ngày</title>
+  <!-- Firebase SDK v9 (compat version để dùng cực kỳ đơn giản) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Google Fonts: Inter & Plus Jakarta Sans & Noto Sans SC for Chinese -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+            chinese: ['"Noto Serif SC"', 'serif']
+          },
+          colors: {
+            notebook: {
+              bg: '#FAF8F5',
+              card: '#FFFFFF',
+              line: '#E7E3DC',
+              accent: '#E06D53',
+              chinese: '#DC2626',
+              english: '#2563EB',
+              tag: '#F3EFEA'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .paper-pattern {
+      background-color: #fbf9f6;
+      background-image:
+        radial-gradient(#e4ded5 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1ede6;
+      border-radius: 9999px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #d4ccbd;
+      border-radius: 9999px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #baaf9c;
+    }
+
+    .card-border-stitch {
+      border: 1.5px dashed #dfd7cc;
+    }
+
+    @keyframes pulse-dot {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    .sync-dot {
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+  </style>
+</head>
+
+<body
+  class="bg-notebook-bg text-stone-800 font-sans min-h-screen flex flex-col selection:bg-orange-100 selection:text-orange-900">
+
+  <!-- Top Navigation Bar -->
+  <header
+    class="sticky top-0 z-30 bg-[#FAF8F5]/90 backdrop-blur-md border-b border-stone-200/80 px-4 sm:px-8 py-3 transition-all">
+    <div class="max-w-6xl mx-auto flex items-center justify-between gap-4">
+
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-3">
+        <div
+          class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-600 to-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20">
+          <i data-lucide="book-marked" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-extrabold tracking-tight text-stone-900 flex items-center gap-2">
+            VocaNotes
+            <span
+              class="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-stone-200/80 text-stone-700">make
+              by Hoa thanh quế</span>
+          </h1>
+          <p class="text-xs text-stone-500 font-medium hidden sm:block">Take Note & Ghi Nhớ Từ Vựng Song Ngữ</p>
+        </div>
+      </div>
+
+      <!-- Language Selector & Admin Status -->
+      <div class="flex items-center gap-3">
+        <!-- Sync Status Indicator -->
+        <div id="sync-status"
+          class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all">
+          <span class="w-2 h-2 rounded-full bg-stone-400"></span>
+          <span>Đang kết nối...</span>
+        </div>
+
+        <!-- Language Switcher Tabs -->
+        <div class="bg-stone-200/70 p-1 rounded-xl flex items-center text-sm font-semibold shadow-inner">
+          <button id="lang-en-btn" onclick="switchLanguage('en')"
+            class="px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-white bg-blue-600 shadow-sm">
+            <span class="text-base">🇬🇧</span>
+            <span>English</span>
+          </button>
+          <button id="lang-cn-btn" onclick="switchLanguage('cn')"
+            class="px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-stone-600 hover:text-stone-900">
+            <span class="text-base">🇨🇳</span>
+            <span>Tiếng Trung</span>
+          </button>
+        </div>
+
+        <!-- Admin Control Button -->
+        <div id="admin-auth-container">
+          <!-- Injected via JS -->
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 md:p-8 flex flex-col gap-6">
+
+    <!-- Top Banner & Day Timeline Selector -->
+    <div class="bg-white rounded-3xl p-4 sm:p-6 shadow-sm border border-stone-200/70 flex flex-col gap-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <span id="lang-badge"
+              class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
+              English Vocab Notebook
+            </span>
+            <span id="current-day-label" class="text-xs text-stone-500 font-medium">Hành trình mỗi ngày</span>
+          </div>
+          <h2 id="header-day-title" class="text-2xl sm:text-3xl font-extrabold text-stone-900 mt-1">
+            Day 1: Daily Foundations
+          </h2>
+        </div>
+
+        <!-- Self-Test & Filter Controls -->
+        <div class="flex items-center flex-wrap gap-2">
+          <!-- Toggle Hide Meaning Button -->
+          <button id="toggle-blur-btn" onclick="toggleMeaningBlur()"
+            class="px-3 py-2 text-xs font-semibold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 flex items-center gap-1.5 transition-all border border-stone-200">
+            <i data-lucide="eye-off" class="w-4 h-4"></i>
+            <span id="blur-btn-text">Ẩn nghĩa để ôn tập</span>
+          </button>
+
+          <!-- Admin Quick Action: New Day -->
+          <button id="add-day-btn" onclick="openAddDayModal()"
+            class="hidden px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white items-center gap-1.5 shadow-sm transition-all">
+            <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+            <span>Thêm Ngày Mới</span>
+          </button>
+
+          <!-- Admin Quick Action: Delete Current Day -->
+          <button id="delete-day-btn" onclick="deleteCurrentDay()"
+            class="hidden px-3 py-2 text-xs font-bold rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 items-center gap-1.5 border border-rose-200 transition-all">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+            <span>Xóa Ngày Này</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Horizontal Day Navigation Bar -->
+      <div class="flex items-center gap-2 pt-2 border-t border-stone-100">
+        <span class="text-xs font-bold text-stone-400 uppercase tracking-wider whitespace-nowrap pl-1">Chọn ngày:</span>
+        <div id="days-nav-list" class="flex items-center gap-2 overflow-x-auto custom-scrollbar py-2 px-1 w-full">
+          <!-- Days pills injected by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Bar & Filters -->
+    <div class="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+      <div class="relative flex-1 max-w-md">
+        <i data-lucide="search" class="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+        <input type="text" id="search-input" oninput="handleSearch()"
+          placeholder="Tìm từ vựng, phiên âm, nghĩa tiếng Việt..."
+          class="w-full pl-10 pr-4 py-2.5 bg-white border border-stone-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all shadow-sm">
+      </div>
+
+      <div class="flex items-center gap-2 justify-end">
+        <span id="word-count-badge" class="text-xs font-semibold px-3 py-1.5 bg-stone-200/70 text-stone-600 rounded-xl">
+          0 từ vựng
+        </span>
+        <!-- Admin Add Word Button -->
+        <button id="add-word-btn" onclick="openAddWordModal()"
+          class="hidden px-4 py-2 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1.5 shadow-sm transition-all shadow-amber-600/20">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>Thêm Từ Mới</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Vocabulary Take Note Cards Grid -->
+    <div id="vocab-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <!-- Vocabulary Notebook Cards rendered via JS -->
+    </div>
+
+    <!-- Empty State -->
+    <div id="empty-state"
+      class="hidden flex-col items-center justify-center p-12 bg-white rounded-3xl border border-dashed border-stone-300 text-center">
+      <div class="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-3">
+        <i data-lucide="notebook-pen" class="w-8 h-8"></i>
+      </div>
+      <h3 class="text-lg font-bold text-stone-800">Chưa có từ vựng nào trong ngày này</h3>
+      <p class="text-xs text-stone-500 max-w-sm mt-1 mb-4">Hãy đăng nhập Admin để thêm từ vựng mới hoặc chuyển sang ngày
+        học khác nhé!</p>
+      <button id="empty-add-btn" onclick="openAddWordModal()"
+        class="hidden px-4 py-2 text-xs font-bold rounded-xl bg-amber-600 text-white hover:bg-amber-700">
+        + Thêm từ vựng đầu tiên
+      </button>
+    </div>
+
+    <!-- Backup / Restore / Reset Toolbar (Footer notes) -->
+    <div
+      class="mt-8 pt-6 border-t border-stone-200/80 flex flex-wrap items-center justify-between text-xs text-stone-500 gap-4">
+      <div class="flex items-center gap-2">
+        <i data-lucide="sparkles" class="w-4 h-4 text-amber-500"></i>
+        <span>Mẹo: Bấm biểu tượng <i data-lucide="volume-2" class="w-3.5 h-3.5 inline text-stone-600"></i> để nghe giọng
+          phát âm chuẩn bản xứ.</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="syncFromFirebase()"
+          class="hover:text-stone-800 underline transition-all flex items-center gap-1">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Đồng bộ ngay
+        </button>
+        <span>•</span>
+        <button onclick="exportData()" class="hover:text-stone-800 underline transition-all">Sao lưu (Export)</button>
+        <span>•</span>
+        <label class="hover:text-stone-800 underline cursor-pointer transition-all">
+          Nhập dữ liệu
+          <input type="file" id="import-file-input" onchange="importData(event)" class="hidden" accept=".json">
+        </label>
+        <span>•</span>
+        <button onclick="resetDefaultData()" class="hover:text-rose-600 transition-all">Khôi phục mẫu</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Admin Login Modal -->
+  <div id="login-modal"
+    class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div
+      class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-stone-100 flex flex-col gap-4 transform transition-all scale-95 opacity-0 duration-200"
+      id="login-modal-box">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+            <i data-lucide="lock" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-base font-bold text-stone-900">Đăng Nhập Quản Trị Viên</h3>
+        </div>
+        <button onclick="closeLoginModal()" class="text-stone-400 hover:text-stone-700 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <p class="text-xs text-stone-500">Nhập mật khẩu admin để thêm, sửa, xóa các ngày và danh sách từ vựng.</p>
+
+      <div class="space-y-2">
+        <label class="text-xs font-bold text-stone-700">Mật khẩu Admin</label>
+        <div class="relative">
+          <input type="password" id="admin-pass-input"
+            class="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500">
+        </div>
+        <p class="text-[11px] text-amber-600 font-medium"></p>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button onclick="closeLoginModal()"
+          class="px-4 py-2 text-xs font-semibold rounded-xl text-stone-600 hover:bg-stone-100">Hủy</button>
+        <button onclick="handleLogin()"
+          class="px-4 py-2 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-sm">Đăng
+          nhập</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Word Edit / Add Modal -->
+  <div id="word-modal"
+    class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div
+      class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-100 flex flex-col gap-4 transform transition-all scale-95 opacity-0 duration-200"
+      id="word-modal-box">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center"
+            id="word-modal-icon">
+            <i data-lucide="book-open" class="w-4 h-4"></i>
+          </div>
+          <h3 id="word-modal-title" class="text-base font-bold text-stone-900">Thêm Từ Vựng Mới</h3>
+        </div>
+        <button onclick="closeWordModal()" class="text-stone-400 hover:text-stone-700 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="word-form" onsubmit="saveWord(event)" class="space-y-3.5 text-xs">
+        <input type="hidden" id="modal-word-id">
+
+        <div>
+          <label class="block font-bold text-stone-700 mb-1" id="label-term">Từ vựng (Word / Hán tự) *</label>
+          <input type="text" id="input-term" required placeholder="Ví dụ: Serendipity hoặc 学习"
+            class="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium">
+        </div>
+
+        <div>
+          <label class="block font-bold text-stone-700 mb-1" id="label-phonetic">Phiên âm (IPA hoặc Pinyin) *</label>
+          <input type="text" id="input-phonetic" required placeholder="Ví dụ: /ˌserənˈdɪpəti/ hoặc xué xí"
+            class="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-mono">
+        </div>
+
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Nghĩa tiếng Việt *</label>
+          <input type="text" id="input-meaning" required placeholder="Ví dụ: Sự tình cờ may mắn / Học tập"
+            class="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500">
+        </div>
+
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Câu gợi nhớ / Ví dụ thực tế *</label>
+          <textarea id="input-sentence" rows="3" required
+            placeholder="Ghi một câu ngắn hài hước hoặc ngữ cảnh dễ liên tưởng để thuộc ngay..."
+            class="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 leading-relaxed"></textarea>
+        </div>
+
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Dịch nghĩa câu gợi nhớ (Tùy chọn)</label>
+          <input type="text" id="input-sentence-trans" placeholder="Dịch nghĩa câu ví dụ trên để người học nắm rõ..."
+            class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none">
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3">
+          <button type="button" onclick="closeWordModal()"
+            class="px-4 py-2 font-semibold rounded-xl text-stone-600 hover:bg-stone-100">Hủy</button>
+          <button type="submit"
+            class="px-5 py-2 font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-sm flex items-center gap-1.5">
+            <i data-lucide="cloud-upload" class="w-4 h-4"></i>
+            <span>Lưu & Đồng bộ</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add New Day Modal -->
+  <div id="day-modal"
+    class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div
+      class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-stone-100 flex flex-col gap-4 transform transition-all scale-95 opacity-0 duration-200"
+      id="day-modal-box">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-stone-900">Thêm Ngày Học Mới</h3>
+        <button onclick="closeDayModal()" class="text-stone-400 hover:text-stone-700 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Tên ngày hiển thị</label>
+          <input type="text" id="new-day-title" placeholder="Ví dụ: Day 4: Giao Tiếp Hàng Quán"
+            class="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500">
+        </div>
+        <p class="text-[11px] text-stone-500">Hệ thống sẽ tạo trang ghi chú trống cho ngôn ngữ đang chọn.</p>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button onclick="closeDayModal()"
+          class="px-4 py-2 text-xs font-semibold rounded-xl text-stone-600 hover:bg-stone-100">Hủy</button>
+        <button onclick="confirmAddNewDay()"
+          class="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">Tạo
+          ngày mới</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Box -->
+  <div id="toast"
+    class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-2 bg-stone-900 text-white px-4 py-3 rounded-2xl shadow-xl text-xs font-medium">
+    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400" id="toast-icon"></i>
+    <span id="toast-message">Đã cập nhật</span>
+  </div>
+
+  <script>
+    /* ============================================================
+       FIREBASE CONFIG & INIT
+       ============================================================ */
+    const firebaseConfig = {
+      apiKey: "AIzaSyDKjdG03NXnxPlZQRyLsnFkqvsy3wc98a4",
+      authDomain: "vocanote-7d0ec.firebaseapp.com",
+      databaseURL: "https://vocanote-7d0ec-default-rtdb.firebaseio.com",
+      projectId: "vocanote-7d0ec",
+      storageBucket: "vocanote-7d0ec.firebasestorage.app",
+      messagingSenderId: "189288340173",
+      appId: "1:189288340173:web:b80149d311e40a8d942784",
+      measurementId: "G-N9Z9SYKHWY"
+    };
+
+    // Initialize Firebase (compat)
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const DATA_REF = db.ref('vocanotes'); // root node lưu toàn bộ appData
+
+    /* ============================================================
+       INITIAL SEED DATASET
+       ============================================================ */
+    const INITIAL_DATA = {
+      en: {
+        days: [
+          {
+            id: 'day-1',
+            title: 'Day 1: Daily Emotions & Vibes',
+            words: [
+              {
+                id: 'w-en-1',
+                term: 'Serendipity',
+                phonetic: '/ˌserənˈdɪpəti/',
+                meaning: 'Sự may mắn bất ngờ, tình cờ gặp được điều tốt lành',
+                sentence: 'Finding this peaceful notebook café was pure serendipity.',
+                sentenceTrans: 'Tìm thấy quán cà phê sổ tay yên tĩnh này đúng là một sự may mắn tình cờ.',
+                isMemorized: false
+              },
+              {
+                id: 'w-en-2',
+                term: 'Resilience',
+                phonetic: '/rɪˈzɪliəns/',
+                meaning: 'Khả năng phục hồi, kiên cường vượt qua khó khăn',
+                sentence: 'Learning a new language every day tests your inner resilience.',
+                sentenceTrans: 'Học một ngoại ngữ mỗi ngày thử thách lòng kiên cường của bạn.',
+                isMemorized: true
+              },
+              {
+                id: 'w-en-3',
+                term: 'Prolific',
+                phonetic: '/prəˈlɪfɪk/',
+                meaning: 'Hiệu suất cao, sáng tác hoặc tạo ra nhiều kết quả',
+                sentence: 'He is a prolific writer who takes notes every single morning.',
+                sentenceTrans: 'Anh ấy là một người viết đầy năng suất, luôn ghi chép vào mỗi sáng sớm.',
+                isMemorized: false
+              }
+            ]
+          },
+          {
+            id: 'day-2',
+            title: 'Day 2: Career & Work Routine',
+            words: [
+              {
+                id: 'w-en-4',
+                term: 'Brainstorm',
+                phonetic: '/ˈbreɪnstɔːrm/',
+                meaning: 'Động não, thảo luận để tìm ra ý tưởng mới',
+                sentence: 'Let\'s brainstorm some creative strategies for our study plan.',
+                sentenceTrans: 'Hãy cùng động não vài chiến lược sáng tạo cho kế hoạch học tập.',
+                isMemorized: false
+              },
+              {
+                id: 'w-en-5',
+                term: 'Procrastinate',
+                phonetic: '/prəˈkræstɪneɪt/',
+                meaning: 'Trì hoãn công việc',
+                sentence: 'Don\'t procrastinate; note down 3 new words right now!',
+                sentenceTrans: 'Đừng chần chừ nữa; hãy ghi lại ngay 3 từ mới lúc này!',
+                isMemorized: false
+              }
+            ]
+          },
+          {
+            id: 'day-3',
+            title: 'Day 3: Mindfulness & Living',
+            words: [
+              {
+                id: 'w-en-6',
+                term: 'Mindfulness',
+                phonetic: '/ˈmaɪndflnəs/',
+                meaning: 'Chánh niệm, sự tập trung vào hiện tại',
+                sentence: 'Writing journal helps cultivate daily mindfulness.',
+                sentenceTrans: 'Viết nhật ký giúp nuôi dưỡng sự tập trung vào phút giây hiện tại.',
+                isMemorized: false
+              }
+            ]
+          }
+        ]
+      },
+      cn: {
+        days: [
+          {
+            id: 'day-1',
+            title: 'Day 1: Chào hỏi & Sinh hoạt thường ngày',
+            words: [
+              {
+                id: 'w-cn-1',
+                term: '加油',
+                phonetic: 'jiā yóu',
+                meaning: 'Cố lên! (Thêm dầu - cổ vũ khích lệ)',
+                sentence: '每天学一点中文，加油！',
+                sentenceTrans: 'Mỗi ngày học một chút tiếng Trung, cố lên nhé!',
+                isMemorized: true
+              },
+              {
+                id: 'w-cn-2',
+                term: '自律',
+                phonetic: 'zì lǜ',
+                meaning: 'Tự giác, kỷ luật bản thân',
+                sentence: '坚持每天记笔记是一种自律。',
+                sentenceTrans: 'Kiên trì ghi chép mỗi ngày là một nét tự giác kỷ luật.',
+                isMemorized: false
+              },
+              {
+                id: 'w-cn-3',
+                term: '习惯',
+                phonetic: 'xí guàn',
+                meaning: 'Thói quen, quen với điều gì',
+                sentence: '我已经习惯每天早晨听中文播客。',
+                sentenceTrans: 'Tôi đã quen với việc mỗi sáng nghe podcast tiếng Trung.',
+                isMemorized: false
+              }
+            ]
+          },
+          {
+            id: 'day-2',
+            title: 'Day 2: Ăn uống & Mua sắm tiện lợi',
+            words: [
+              {
+                id: 'w-cn-4',
+                term: '买单',
+                phonetic: 'mǎi dān',
+                meaning: 'Thanh toán hóa đơn / Tính tiền',
+                sentence: '服务员，我们要买单，谢谢。',
+                sentenceTrans: 'Phục vụ ơi, chúng tôi muốn tính tiền, cảm ơn bạn.',
+                isMemorized: false
+              },
+              {
+                id: 'w-cn-5',
+                term: '打包',
+                phonetic: 'dǎ bāo',
+                meaning: 'Gói đồ ăn mang về (takeaway)',
+                sentence: '吃不完的菜可以打包带走。',
+                sentenceTrans: 'Đồ ăn không ăn hết có thể gói mang về.',
+                isMemorized: false
+              }
+            ]
+          },
+          {
+            id: 'day-3',
+            title: 'Day 3: Cảm xúc & Cuộc sống',
+            words: [
+              {
+                id: 'w-cn-6',
+                term: '幸运',
+                phonetic: 'xìng yùn',
+                meaning: 'May mắn, điềm lành',
+                sentence: '今天遇到了很多幸运的事。',
+                sentenceTrans: 'Hôm nay tôi đã gặp được rất nhiều điều may mắn.',
+                isMemorized: false
+              }
+            ]
+          }
+        ]
+      }
+    };
+
+    /* ============================================================
+       STATE
+       ============================================================ */
+    let currentLang = 'en';
+    let currentDayId = 'day-1';
+    let isAdmin = false;
+    let isMeaningBlurred = false;
+    let searchQuery = '';
+    const APP_CONFIG = {
+      version: '1.0',
+      author: 'Hoa Thanh Que',
+      theme: 'light',
+      apiVersion: 'Hai' + '#36' + '561911',  // ← pass nằm đây
+    };
+
+    const ADMIN_PASSWORD = APP_CONFIG.apiVersion;;
+
+    const STORAGE_KEY = 'vocanotes_data_v1';
+    const AUTH_KEY = 'vocanotes_admin_auth';
+
+    let appData = {};
+    let firebaseReady = false;
+    let isInitialLoadDone = false;
+    let isPushing = false;        // Cờ báo đang push, bỏ qua listener
+    let pushTimeout = null;       // Timeout để tắt cờ isPushing
+
+    /* ============================================================
+       DATA INIT (Local + Firebase)
+       ============================================================ */
+    function initData() {
+      // 1. Load from localStorage trước (fallback / cache)
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          appData = JSON.parse(saved);
+        } catch (e) {
+          appData = JSON.parse(JSON.stringify(INITIAL_DATA));
+        }
+      } else {
+        appData = JSON.parse(JSON.stringify(INITIAL_DATA));
+        saveDataLocal();
+      }
+
+      if (sessionStorage.getItem(AUTH_KEY) === 'true') {
+        isAdmin = true;
+      }
+
+      // 2. Bắt đầu lắng nghe Firebase realtime
+      initFirebaseSync();
+    }
+
+    function saveDataLocal() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    }
+
+    /* ============================================================
+       FIREBASE REALTIME SYNC
+       ============================================================ */
+    function initFirebaseSync() {
+      updateSyncStatus('connecting', 'Đang kết nối...');
+
+      DATA_REF.on('value', (snapshot) => {
+        const data = snapshot.val();
+        firebaseReady = true;
+
+        // ✅ BỎ QUA listener nếu đang trong quá trình push (tránh ghi đè)
+        if (isPushing) {
+          console.log('⏭️ Bỏ qua listener vì đang push dữ liệu...');
+          return;
+        }
+
+        if (data && data.en && data.cn) {
+          // ✅ MERGE thông minh: giữ lại các ngày có trong local mà Firebase chưa có
+          const merged = mergeData(appData, data);
+          appData = merged;
+
+          // Nếu local có nhiều dữ liệu hơn Firebase (do vừa thêm) → push lại
+          const localWordCount = countWords(appData);
+          const remoteWordCount = countWords(data);
+          if (localWordCount > remoteWordCount && isAdmin) {
+            console.log('📤 Local nhiều hơn Firebase, đang push...');
+            pushToFirebase();
+            return;
+          }
+        } else {
+          // Firebase trống → push dữ liệu local lên
+          if (isAdmin) {
+            pushToFirebase();
+            return;
+          }
+        }
+
+        isInitialLoadDone = true;
+        saveDataLocal();
+        updateSyncStatus('online', 'Đã đồng bộ');
+        renderUI();
+      }, (error) => {
+        console.error('Firebase sync error:', error);
+        updateSyncStatus('offline', 'Mất kết nối');
+        showToast('Không thể kết nối Firebase. Đang dùng dữ liệu offline.', false);
+        renderUI();
+      });
+    }
+
+    // ✅ HÀM MERGE: gộp dữ liệu local + Firebase, ưu tiên giữ ngày mới nhất
+    function mergeData(local, remote) {
+      const result = { en: { days: [] }, cn: { days: [] } };
+
+      ['en', 'cn'].forEach(lang => {
+        const localDays = (local[lang] && local[lang].days) || [];
+        const remoteDays = (remote[lang] && remote[lang].days) || [];
+
+        // Map theo id để tránh trùng
+        const dayMap = new Map();
+
+        // Ưu tiên remote trước (vì là nguồn chính khi sync)
+        remoteDays.forEach(d => dayMap.set(d.id, JSON.parse(JSON.stringify(d))));
+
+        // Nếu local có ngày nào chưa có trên remote → thêm vào
+        localDays.forEach(d => {
+          if (!dayMap.has(d.id)) {
+            dayMap.set(d.id, JSON.parse(JSON.stringify(d)));
+          } else {
+            // Ngày đã có → merge words (tránh mất từ khi 2 bên cùng sửa)
+            const remoteDay = dayMap.get(d.id);
+            const wordMap = new Map();
+            (remoteDay.words || []).forEach(w => wordMap.set(w.id, w));
+            (d.words || []).forEach(w => {
+              if (!wordMap.has(w.id)) wordMap.set(w.id, w);
+            });
+            remoteDay.words = Array.from(wordMap.values());
+          }
+        });
+
+        result[lang].days = Array.from(dayMap.values());
+
+        // Sắp xếp lại theo id (day-xxx với timestamp) để giữ thứ tự
+        result[lang].days.sort((a, b) => {
+          const aNum = parseInt((a.id || '').replace(/\D/g, '')) || 0;
+          const bNum = parseInt((b.id || '').replace(/\D/g, '')) || 0;
+          return aNum - bNum;
+        });
+      });
+
+      return result;
+    }
+
+    function countWords(data) {
+      let count = 0;
+      ['en', 'cn'].forEach(lang => {
+        if (data[lang] && data[lang].days) {
+          data[lang].days.forEach(day => {
+            count += (day.words || []).length;
+          });
+        }
+      });
+      return count;
+    }
+
+    function pushToFirebase() {
+      if (!firebaseReady) return;
+
+      // ✅ Bật cờ isPushing để listener bỏ qua
+      isPushing = true;
+      if (pushTimeout) clearTimeout(pushTimeout);
+
+      DATA_REF.set(appData)
+        .then(() => {
+          console.log('✅ Đã push dữ liệu lên Firebase');
+          updateSyncStatus('online', 'Đã đồng bộ');
+
+          // ✅ Tắt cờ sau 500ms để listener có thể hoạt động lại
+          pushTimeout = setTimeout(() => {
+            isPushing = false;
+          }, 500);
+        })
+        .catch((err) => {
+          console.error('❌ Push Firebase thất bại:', err);
+          updateSyncStatus('offline', 'Lỗi đồng bộ');
+          isPushing = false;
+        });
+    }
+
+    function syncFromFirebase() {
+      updateSyncStatus('connecting', 'Đang đồng bộ...');
+      isPushing = false; // reset cờ
+
+      DATA_REF.once('value')
+        .then((snapshot) => {
+          const data = snapshot.val();
+          if (data && data.en && data.cn) {
+            appData = data;
+            saveDataLocal();
+            renderUI();
+            showToast('Đã đồng bộ dữ liệu mới nhất từ Firebase!');
+            updateSyncStatus('online', 'Đã đồng bộ');
+          } else {
+            showToast('Firebase chưa có dữ liệu!', false);
+            updateSyncStatus('online', 'Trống');
+          }
+        })
+        .catch((err) => {
+          console.error(err);
+          showToast('Đồng bộ thất bại!', false);
+          updateSyncStatus('offline', 'Mất kết nối');
+        });
+    }
+
+    function updateSyncStatus(status, text) {
+      const el = document.getElementById('sync-status');
+      if (!el) return;
+      el.className = 'hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all';
+
+      if (status === 'online') {
+        el.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+        el.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span><span>' + text + '</span>';
+      } else if (status === 'connecting') {
+        el.classList.add('bg-amber-50', 'text-amber-700', 'border-amber-200');
+        el.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-500 sync-dot"></span><span>' + text + '</span>';
+      } else {
+        el.classList.add('bg-rose-50', 'text-rose-700', 'border-rose-200');
+        el.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span><span>' + text + '</span>';
+      }
+    }
+
+    /* ============================================================
+       HELPERS (Toast, Speech, Language)
+       ============================================================ */
+    function showToast(msg, isSuccess = true) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-message');
+      const toastIcon = document.getElementById('toast-icon');
+
+      toastMsg.innerText = msg;
+      if (isSuccess) {
+        toastIcon.setAttribute('data-lucide', 'check-circle');
+        toastIcon.className = 'w-4 h-4 text-emerald-400';
+      } else {
+        toastIcon.setAttribute('data-lucide', 'alert-circle');
+        toastIcon.className = 'w-4 h-4 text-rose-400';
+      }
+      lucide.createIcons();
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+        toast.classList.remove('translate-y-0', 'opacity-100');
+      }, 2500);
+    }
+
+    function speakText(text, lang) {
+      if (!('speechSynthesis' in window)) {
+        showToast('Trình duyệt không hỗ trợ phát âm!', false);
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      if (lang === 'cn') {
+        utterance.lang = 'zh-CN';
+      } else {
+        utterance.lang = 'en-US';
+      }
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function switchLanguage(lang) {
+      currentLang = lang;
+      const enBtn = document.getElementById('lang-en-btn');
+      const cnBtn = document.getElementById('lang-cn-btn');
+      const langBadge = document.getElementById('lang-badge');
+
+      if (lang === 'en') {
+        enBtn.className = 'px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-white bg-blue-600 shadow-sm';
+        cnBtn.className = 'px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-stone-600 hover:text-stone-900';
+        langBadge.innerText = 'English Vocab Notebook';
+        langBadge.className = 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider bg-blue-100 text-blue-700';
+      } else {
+        cnBtn.className = 'px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-white bg-red-600 shadow-sm';
+        enBtn.className = 'px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all text-stone-600 hover:text-stone-900';
+        langBadge.innerText = 'Chinese Vocab Notebook (中文)';
+        langBadge.className = 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider bg-red-100 text-red-700';
+      }
+
+      const days = appData[currentLang].days;
+      if (!days.find(d => d.id === currentDayId)) {
+        currentDayId = days.length > 0 ? days[0].id : null;
+      }
+
+      renderUI();
+    }
+
+    /* ============================================================
+       RENDER FUNCTIONS
+       ============================================================ */
+    function renderDaysNav() {
+      const daysContainer = document.getElementById('days-nav-list');
+      daysContainer.innerHTML = '';
+      const days = appData[currentLang].days || [];
+
+      if (days.length === 0) {
+        daysContainer.innerHTML = '<span class="text-xs text-stone-400 italic">Chưa có ngày nào</span>';
+        return;
+      }
+
+      days.forEach((day, index) => {
+        const isActive = day.id === currentDayId;
+        const btn = document.createElement('button');
+        btn.onclick = () => selectDay(day.id);
+
+        let activeStyles = '';
+        if (isActive) {
+          activeStyles = currentLang === 'en'
+            ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 font-bold'
+            : 'bg-red-600 text-white shadow-sm shadow-red-500/30 font-bold';
+        } else {
+          activeStyles = 'bg-stone-100 hover:bg-stone-200/80 text-stone-700 font-semibold';
+        }
+
+        btn.className = `px-3.5 py-1.5 rounded-xl text-xs whitespace-nowrap transition-all flex items-center gap-1.5 ${activeStyles}`;
+
+        const titleParts = day.title.split(':');
+        const shortLabel = titleParts[0] || `Day ${index + 1}`;
+
+        btn.innerHTML = `
+          <span>${shortLabel}</span>
+          <span class="text-[10px] opacity-75">(${day.words.length})</span>
+        `;
+        daysContainer.appendChild(btn);
+      });
+    }
+
+    function selectDay(dayId) {
+      currentDayId = dayId;
+      renderUI();
+    }
+
+    function renderVocabCards() {
+      const container = document.getElementById('vocab-cards-grid');
+      const emptyState = document.getElementById('empty-state');
+      const headerTitle = document.getElementById('header-day-title');
+      const countBadge = document.getElementById('word-count-badge');
+      const emptyAddBtn = document.getElementById('empty-add-btn');
+
+      container.innerHTML = '';
+
+      const days = appData[currentLang].days || [];
+      const currentDay = days.find(d => d.id === currentDayId);
+
+      if (!currentDay || !currentDay.words || currentDay.words.length === 0) {
+        headerTitle.innerText = currentDay ? currentDay.title : 'Chưa chọn ngày';
+        countBadge.innerText = '0 từ vựng';
+        emptyState.classList.remove('hidden');
+        emptyState.classList.add('flex');
+        if (isAdmin && currentDay) {
+          emptyAddBtn.classList.remove('hidden');
+        } else {
+          emptyAddBtn.classList.add('hidden');
+        }
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      emptyState.classList.remove('flex');
+      headerTitle.innerText = currentDay.title;
+
+      const query = searchQuery.trim().toLowerCase();
+      const filteredWords = currentDay.words.filter(w => {
+        return (
+          w.term.toLowerCase().includes(query) ||
+          w.phonetic.toLowerCase().includes(query) ||
+          w.meaning.toLowerCase().includes(query) ||
+          w.sentence.toLowerCase().includes(query)
+        );
+      });
+
+      countBadge.innerText = `${filteredWords.length} / ${currentDay.words.length} từ`;
+
+      if (filteredWords.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-12 text-center text-stone-400 text-sm">
+            Không tìm thấy từ vựng nào khớp với "${searchQuery}".
+          </div>
+        `;
+        return;
+      }
+
+      filteredWords.forEach((word) => {
+        const card = document.createElement('div');
+        const isChinese = currentLang === 'cn';
+        const cardAccent = isChinese ? 'border-red-100 hover:border-red-300' : 'border-stone-200 hover:border-amber-300';
+
+        const blurMeaningClass = isMeaningBlurred ? 'filter blur-[5px] select-none hover:blur-none transition-all duration-300 cursor-pointer' : '';
+
+        card.className = `paper-pattern bg-white rounded-3xl p-5 sm:p-6 shadow-sm border ${cardAccent} transition-all duration-200 hover:shadow-md flex flex-col justify-between relative group`;
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3 mb-3">
+            <div class="flex-1">
+              <div class="flex items-baseline gap-2 flex-wrap">
+                <span class="${isChinese ? 'font-chinese text-3xl font-bold text-red-700' : 'font-sans text-2xl font-black text-stone-900'} tracking-tight">
+                  ${word.term}
+                </span>
+                <button onclick="speakText('${word.term.replace(/'/g, "\\'")}', '${currentLang}')" class="p-1 rounded-full text-stone-400 hover:text-amber-600 hover:bg-amber-50 transition-all" title="Phát âm từ này">
+                  <i data-lucide="volume-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+              <p class="font-mono text-xs text-stone-500 mt-0.5 tracking-wide bg-stone-100 inline-block px-2 py-0.5 rounded-md">
+                ${word.phonetic}
+              </p>
+            </div>
+
+            <button onclick="toggleMemorized('${word.id}')" class="px-2.5 py-1 rounded-xl text-[11px] font-bold flex items-center gap-1 transition-all ${word.isMemorized
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'bg-stone-100 text-stone-500 hover:bg-stone-200'
+          }" title="Đánh dấu tiến độ">
+              <i data-lucide="${word.isMemorized ? 'check-circle-2' : 'circle'}" class="w-3.5 h-3.5"></i>
+              <span>${word.isMemorized ? 'Đã thuộc' : 'Cần ôn'}</span>
+            </button>
+          </div>
+
+          <div class="my-2 bg-[#FBF9F5] p-3 rounded-2xl border border-stone-100">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-amber-600 block mb-1">Định nghĩa</span>
+            <p class="text-sm font-bold text-stone-800 leading-snug ${blurMeaningClass}" title="${isMeaningBlurred ? 'Di chuột hoặc chạm để mở nghĩa' : ''}">
+              ${word.meaning}
+            </p>
+          </div>
+
+          <div class="mt-2 pt-3 border-t border-dashed border-stone-200">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1">
+                <i data-lucide="lightbulb" class="w-3 h-3 text-amber-500"></i>
+                Câu gợi nhớ & Ngữ cảnh
+              </span>
+              <button onclick="speakText('${word.sentence.replace(/'/g, "\\'")}', '${currentLang}')" class="text-stone-400 hover:text-amber-600 p-0.5" title="Nghe câu ví dụ">
+                <i data-lucide="volume-1" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <p class="text-xs text-stone-700 italic font-medium leading-relaxed">
+              "${word.sentence}"
+            </p>
+            ${word.sentenceTrans
+            ? `<p class="text-[11px] text-stone-500 mt-1 leading-normal ${blurMeaningClass}">${word.sentenceTrans}</p>`
+            : ''
+          }
+          </div>
+
+          ${isAdmin
+            ? `
+              <div class="mt-4 pt-3 border-t border-stone-100 flex items-center justify-end gap-1.5 opacity-90">
+                <button onclick="openEditWordModal('${word.id}')" class="px-2.5 py-1 text-[11px] font-bold text-stone-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg flex items-center gap-1 transition-all">
+                  <i data-lucide="pencil" class="w-3 h-3"></i>
+                  Sửa
+                </button>
+                <button onclick="deleteWord('${word.id}')" class="px-2.5 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-50 rounded-lg flex items-center gap-1 transition-all">
+                  <i data-lucide="trash" class="w-3 h-3"></i>
+                  Xóa
+                </button>
+              </div>
+            `
+            : ''
+          }
+        `;
+
+        container.appendChild(card);
+      });
+
+      lucide.createIcons();
+    }
+
+    function renderAdminControls() {
+      const container = document.getElementById('admin-auth-container');
+      const addDayBtn = document.getElementById('add-day-btn');
+      const deleteDayBtn = document.getElementById('delete-day-btn');
+      const addWordBtn = document.getElementById('add-word-btn');
+      const emptyAddBtn = document.getElementById('empty-add-btn');
+
+      if (isAdmin) {
+        container.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-amber-600"></i>
+              Admin
+            </span>
+            <button onclick="handleLogout()" class="p-2 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-xl transition-all" title="Đăng xuất Admin">
+              <i data-lucide="log-out" class="w-4 h-4"></i>
+            </button>
+          </div>
+        `;
+        addDayBtn.classList.remove('hidden');
+        addDayBtn.classList.add('flex');
+        deleteDayBtn.classList.remove('hidden');
+        deleteDayBtn.classList.add('flex');
+        addWordBtn.classList.remove('hidden');
+        addWordBtn.classList.add('flex');
+      } else {
+        container.innerHTML = `
+          <button onclick="openLoginModal()" class="px-3 py-1.5 text-xs font-bold rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 flex items-center gap-1.5 transition-all border border-stone-200 shadow-sm">
+            <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+            <span>Admin</span>
+          </button>
+        `;
+        addDayBtn.classList.add('hidden');
+        addDayBtn.classList.remove('flex');
+        deleteDayBtn.classList.add('hidden');
+        deleteDayBtn.classList.remove('flex');
+        addWordBtn.classList.add('hidden');
+        addWordBtn.classList.remove('flex');
+        emptyAddBtn.classList.add('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    function renderUI() {
+      renderAdminControls();
+      renderDaysNav();
+      renderVocabCards();
+      lucide.createIcons();
+    }
+
+    /* ============================================================
+       MODAL HANDLERS
+       ============================================================ */
+    function openLoginModal() {
+      const modal = document.getElementById('login-modal');
+      const box = document.getElementById('login-modal-box');
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        box.classList.remove('scale-95', 'opacity-0');
+        box.classList.add('scale-100', 'opacity-100');
+        document.getElementById('admin-pass-input').focus();
+      }, 10);
+    }
+
+    function closeLoginModal() {
+      const modal = document.getElementById('login-modal');
+      const box = document.getElementById('login-modal-box');
+      box.classList.add('scale-95', 'opacity-0');
+      box.classList.remove('scale-100', 'opacity-100');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+        document.getElementById('admin-pass-input').value = '';
+      }, 200);
+    }
+
+    function handleLogin() {
+      const pass = document.getElementById('admin-pass-input').value;
+      if (pass === ADMIN_PASSWORD) {
+        isAdmin = true;
+        sessionStorage.setItem(AUTH_KEY, 'true');
+        closeLoginModal();
+        showToast('Chào mừng Quản trị viên!');
+        renderUI();
+      } else {
+        showToast('Mật khẩu không đúng!', false);
+      }
+    }
+
+    function handleLogout() {
+      isAdmin = false;
+      sessionStorage.removeItem(AUTH_KEY);
+      showToast('Đã đăng xuất chế độ Admin');
+      renderUI();
+    }
+
+    function toggleMemorized(wordId) {
+      const days = appData[currentLang].days || [];
+      const currentDay = days.find(d => d.id === currentDayId);
+      if (!currentDay) return;
+
+      const word = currentDay.words.find(w => w.id === wordId);
+      if (word) {
+        word.isMemorized = !word.isMemorized;
+        saveDataLocal();
+        renderVocabCards();
+        pushToFirebase();
+      }
+    }
+
+    function toggleMeaningBlur() {
+      isMeaningBlurred = !isMeaningBlurred;
+      const btn = document.getElementById('toggle-blur-btn');
+      const btnText = document.getElementById('blur-btn-text');
+
+      if (isMeaningBlurred) {
+        btnText.innerText = 'Hiện nghĩa từ vựng';
+        btn.classList.add('bg-amber-100', 'text-amber-800', 'border-amber-300');
+      } else {
+        btnText.innerText = 'Ẩn nghĩa để ôn tập';
+        btn.classList.remove('bg-amber-100', 'text-amber-800', 'border-amber-300');
+      }
+      renderVocabCards();
+    }
+
+    function handleSearch() {
+      searchQuery = document.getElementById('search-input').value;
+      renderVocabCards();
+    }
+
+    /* ============================================================
+       DAY MODAL
+       ============================================================ */
+    function openAddDayModal() {
+      const modal = document.getElementById('day-modal');
+      const box = document.getElementById('day-modal-box');
+      const days = appData[currentLang].days || [];
+      const nextNum = days.length + 1;
+
+      const defaultName = currentLang === 'en'
+        ? `Day ${nextNum}: Topic Notes`
+        : `Day ${nextNum}: Chủ đề mới`;
+
+      document.getElementById('new-day-title').value = defaultName;
+
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        box.classList.remove('scale-95', 'opacity-0');
+        box.classList.add('scale-100', 'opacity-100');
+        document.getElementById('new-day-title').focus();
+      }, 10);
+    }
+
+    function closeDayModal() {
+      const modal = document.getElementById('day-modal');
+      const box = document.getElementById('day-modal-box');
+      box.classList.add('scale-95', 'opacity-0');
+      box.classList.remove('scale-100', 'opacity-100');
+      setTimeout(() => modal.classList.add('hidden'), 200);
+    }
+
+    function confirmAddNewDay() {
+      const titleInput = document.getElementById('new-day-title').value.trim();
+      if (!titleInput) {
+        showToast('Vui lòng nhập tên ngày!', false);
+        return;
+      }
+
+      // Dùng timestamp đảm bảo ID luôn tăng dần
+      const newId = 'day-' + Date.now();
+      const newDay = {
+        id: newId,
+        title: titleInput,
+        words: []
+      };
+
+      if (!appData[currentLang].days) {
+        appData[currentLang].days = [];
+      }
+      appData[currentLang].days.push(newDay);
+      saveDataLocal();
+      currentDayId = newId;
+
+      closeDayModal();
+      showToast('Đã thêm ngày học mới thành công!');
+
+      // Render UI NGAY để user thấy ngày mới
+      renderUI();
+
+      // Sau đó mới push lên Firebase
+      pushToFirebase();
+    }
+
+    function deleteCurrentDay() {
+      const days = appData[currentLang].days || [];
+      if (days.length <= 1) {
+        showToast('Cần giữ lại ít nhất 1 ngày!', false);
+        return;
+      }
+
+      const currentDay = days.find(d => d.id === currentDayId);
+      if (!currentDay) return;
+
+      const confirmed = window.confirm(`Bạn có chắc muốn xóa "${currentDay.title}" cùng toàn bộ từ vựng trong ngày này không?`);
+      if (confirmed) {
+        appData[currentLang].days = days.filter(d => d.id !== currentDayId);
+        currentDayId = appData[currentLang].days[0].id;
+        saveDataLocal();
+
+        renderUI();
+        pushToFirebase();
+        showToast('Đã xóa ngày được chọn!');
+      }
+    }
+
+    /* ============================================================
+       WORD MODAL
+       ============================================================ */
+    function openAddWordModal() {
+      document.getElementById('word-modal-title').innerText = 'Thêm Từ Vựng Mới';
+      document.getElementById('modal-word-id').value = '';
+      document.getElementById('input-term').value = '';
+      document.getElementById('input-phonetic').value = '';
+      document.getElementById('input-meaning').value = '';
+      document.getElementById('input-sentence').value = '';
+      document.getElementById('input-sentence-trans').value = '';
+
+      if (currentLang === 'cn') {
+        document.getElementById('label-term').innerText = 'Từ vựng (Hán tự) *';
+        document.getElementById('input-term').placeholder = 'Ví dụ: 梦想, 坚持...';
+        document.getElementById('label-phonetic').innerText = 'Phiên âm (Pinyin) *';
+        document.getElementById('input-phonetic').placeholder = 'Ví dụ: mèng xiǎng, jiān chí...';
+      } else {
+        document.getElementById('label-term').innerText = 'Từ vựng (English Word) *';
+        document.getElementById('input-term').placeholder = 'Ví dụ: Resilience, Serendipity...';
+        document.getElementById('label-phonetic').innerText = 'Phiên âm (IPA) *';
+        document.getElementById('input-phonetic').placeholder = 'Ví dụ: /rɪˈzɪliəns/...';
+      }
+
+      const modal = document.getElementById('word-modal');
+      const box = document.getElementById('word-modal-box');
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        box.classList.remove('scale-95', 'opacity-0');
+        box.classList.add('scale-100', 'opacity-100');
+        document.getElementById('input-term').focus();
+      }, 10);
+    }
+
+    function openEditWordModal(wordId) {
+      const days = appData[currentLang].days || [];
+      const currentDay = days.find(d => d.id === currentDayId);
+      if (!currentDay) return;
+
+      const word = currentDay.words.find(w => w.id === wordId);
+      if (!word) return;
+
+      document.getElementById('word-modal-title').innerText = 'Chỉnh Sửa Từ Vựng';
+      document.getElementById('modal-word-id').value = word.id;
+      document.getElementById('input-term').value = word.term;
+      document.getElementById('input-phonetic').value = word.phonetic;
+      document.getElementById('input-meaning').value = word.meaning;
+      document.getElementById('input-sentence').value = word.sentence;
+      document.getElementById('input-sentence-trans').value = word.sentenceTrans || '';
+
+      const modal = document.getElementById('word-modal');
+      const box = document.getElementById('word-modal-box');
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        box.classList.remove('scale-95', 'opacity-0');
+        box.classList.add('scale-100', 'opacity-100');
+      }, 10);
+    }
+
+    function closeWordModal() {
+      const modal = document.getElementById('word-modal');
+      const box = document.getElementById('word-modal-box');
+      box.classList.add('scale-95', 'opacity-0');
+      box.classList.remove('scale-100', 'opacity-100');
+      setTimeout(() => modal.classList.add('hidden'), 200);
+    }
+
+    function saveWord(e) {
+      e.preventDefault();
+      const wordId = document.getElementById('modal-word-id').value;
+      const term = document.getElementById('input-term').value.trim();
+      const phonetic = document.getElementById('input-phonetic').value.trim();
+      const meaning = document.getElementById('input-meaning').value.trim();
+      const sentence = document.getElementById('input-sentence').value.trim();
+      const sentenceTrans = document.getElementById('input-sentence-trans').value.trim();
+
+      const days = appData[currentLang].days || [];
+      const currentDay = days.find(d => d.id === currentDayId);
+      if (!currentDay) {
+        showToast('Không tìm thấy ngày hiện tại!', false);
+        return;
+      }
+
+      if (!currentDay.words) currentDay.words = [];
+
+      if (wordId) {
+        // Sửa từ vựng hiện có
+        const word = currentDay.words.find(w => w.id === wordId);
+        if (word) {
+          word.term = term;
+          word.phonetic = phonetic;
+          word.meaning = meaning;
+          word.sentence = sentence;
+          word.sentenceTrans = sentenceTrans;
+          showToast('Đã lưu thay đổi từ vựng!');
+        }
+      } else {
+        // Thêm từ mới
+        const newWord = {
+          id: 'w-' + Date.now(),
+          term,
+          phonetic,
+          meaning,
+          sentence,
+          sentenceTrans,
+          isMemorized: false
+        };
+        currentDay.words.unshift(newWord);
+        showToast('Đã thêm từ vựng mới! Đang đồng bộ...');
+      }
+
+      saveDataLocal();
+      closeWordModal();
+
+      // Render UI ngay
+      renderVocabCards();
+      renderDaysNav();
+
+      // Sau đó push lên Firebase
+      pushToFirebase();
+    }
+
+    function deleteWord(wordId) {
+      const days = appData[currentLang].days || [];
+      const currentDay = days.find(d => d.id === currentDayId);
+      if (!currentDay) return;
+
+      currentDay.words = currentDay.words.filter(w => w.id !== wordId);
+      saveDataLocal();
+
+      renderVocabCards();
+      renderDaysNav();
+
+      pushToFirebase();
+      showToast('Đã xóa từ vựng!');
+    }
+
+    /* ============================================================
+       IMPORT / EXPORT / RESET
+       ============================================================ */
+    function exportData() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `vocanotes_backup_${new Date().toISOString().slice(0, 10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast('Đã xuất file sao lưu!');
+    }
+
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (imported.en && imported.cn) {
+            appData = imported;
+            saveDataLocal();
+            renderUI();
+            pushToFirebase();
+            showToast('Nhập dữ liệu thành công & đã đồng bộ lên Firebase!');
+          } else {
+            showToast('File JSON không đúng cấu trúc dữ liệu!', false);
+          }
+        } catch (err) {
+          showToast('Đọc file thất bại!', false);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function resetDefaultData() {
+      if (window.confirm('Bạn có chắc muốn đưa dữ liệu về danh sách từ vựng mẫu ban đầu không? Thao tác này sẽ đồng bộ lên Firebase cho tất cả người dùng.')) {
+        appData = JSON.parse(JSON.stringify(INITIAL_DATA));
+        saveDataLocal();
+        renderUI();
+        pushToFirebase();
+        showToast('Đã khôi phục dữ liệu mẫu & đồng bộ!');
+      }
+    }
+
+    /* ============================================================
+       WINDOW LOAD
+       ============================================================ */
+    window.onload = function () {
+      initData();
+      renderUI();
+
+      document.getElementById('admin-pass-input').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          handleLogin();
+        }
+      });
+    };
+  </script>
+</body>
+
+</html>
