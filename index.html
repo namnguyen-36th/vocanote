@@ -3,8 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
-  <meta name="theme-color" content="#FAF8F5">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VocaNotes - Sổ Tay Từ Vựng Hàng Ngày</title>
   <!-- Firebase SDK v9 (compat version để dùng cực kỳ đơn giản) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -91,83 +90,6 @@
     .sync-dot {
       animation: pulse-dot 1.5s ease-in-out infinite;
     }
-    /* ============ RESPONSIVE BASE ============ */
-* {
-  -webkit-tap-highlight-color: transparent;
-}
-
-html {
-  font-size: 16px;
-  -webkit-text-size-adjust: 100%;
-}
-
-@media (max-width: 640px) {
-  html { font-size: 15px; }
-}
-
-@media (max-width: 400px) {
-  html { font-size: 14px; }
-}
-
-@media (min-width: 1920px) {
-  html { font-size: 18px; }
-}
-
-body {
-  min-height: 100dvh; /* Mobile viewport height thật */
-  overflow-x: hidden;
-}
-
-/* Touch-friendly */
-button, a, input, textarea, label {
-  touch-action: manipulation;
-}
-
-/* Modal responsive — full-width bottom sheet trên mobile */
-.modal-box {
-  max-height: calc(100vh - 2rem);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-@media (max-width: 640px) {
-  .modal-box {
-    max-height: 95vh;
-    border-radius: 1.5rem 1.5rem 0 0;
-    margin-top: auto;
-  }
-}
-
-/* Ẩn scrollbar trên mobile cho gọn */
-@media (max-width: 640px) {
-  .custom-scrollbar::-webkit-scrollbar {
-    height: 0;
-    width: 0;
-  }
-}
-
-/* Safe area cho iPhone notch */
-@supports (padding: env(safe-area-inset-bottom)) {
-  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
-  .safe-top { padding-top: env(safe-area-inset-top); }
-}
-
-/* Card hover chỉ khi có chuột (không phải touch) */
-@media (hover: hover) {
-  .vocab-card:hover {
-    transform: translateY(-2px);
-  }
-}
-
-/* Animation card xuất hiện */
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.fade-in-up {
-  animation: fadeInUp 0.3s ease-out;
-}
   </style>
 </head>
 
@@ -431,6 +353,12 @@ button, a, input, textarea, label {
           <textarea id="input-sentence" rows="3" required
             placeholder="Ghi một câu ngắn hài hước hoặc ngữ cảnh dễ liên tưởng để thuộc ngay..."
             class="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 leading-relaxed"></textarea>
+        </div>
+
+        <div>
+          <label class="block font-bold text-stone-700 mb-1">Phiên âm câu ví dụ (Tùy chọn)</label>
+          <input type="text" id="input-sentence-phonetic" placeholder="Ví dụ: Měi tiān xué yī diǎn zhōng wén..."
+            class="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none font-mono">
         </div>
 
         <div>
@@ -1110,9 +1038,13 @@ button, a, input, textarea, label {
               </button>
             </div>
             <p class="text-xs text-stone-700 italic font-medium leading-relaxed">
-              "${word.sentence}"
-            </p>
-            ${word.sentenceTrans
+  "${word.sentence}"
+</p>
+${word.sentencePhonetic
+            ? `<p class="text-[11px] text-stone-500 font-mono mt-1 leading-normal ${blurMeaningClass}">${word.sentencePhonetic}</p>`
+            : ''
+          }
+${word.sentenceTrans
             ? `<p class="text-[11px] text-stone-500 mt-1 leading-normal ${blurMeaningClass}">${word.sentenceTrans}</p>`
             : ''
           }
@@ -1366,6 +1298,7 @@ button, a, input, textarea, label {
       document.getElementById('input-meaning').value = '';
       document.getElementById('input-sentence').value = '';
       document.getElementById('input-sentence-trans').value = '';
+      document.getElementById('input-sentence-phonetic').value = '';
 
       if (currentLang === 'cn') {
         document.getElementById('label-term').innerText = 'Từ vựng (Hán tự) *';
@@ -1404,6 +1337,7 @@ button, a, input, textarea, label {
       document.getElementById('input-meaning').value = word.meaning;
       document.getElementById('input-sentence').value = word.sentence;
       document.getElementById('input-sentence-trans').value = word.sentenceTrans || '';
+      document.getElementById('input-sentence-phonetic').value = word.sentencePhonetic || '';
 
       const modal = document.getElementById('word-modal');
       const box = document.getElementById('word-modal-box');
@@ -1430,6 +1364,7 @@ button, a, input, textarea, label {
       const meaning = document.getElementById('input-meaning').value.trim();
       const sentence = document.getElementById('input-sentence').value.trim();
       const sentenceTrans = document.getElementById('input-sentence-trans').value.trim();
+      const sentencePhonetic = document.getElementById('input-sentence-phonetic').value.trim();
 
       const days = appData[currentLang].days || [];
       const currentDay = days.find(d => d.id === currentDayId);
@@ -1449,6 +1384,7 @@ button, a, input, textarea, label {
           word.meaning = meaning;
           word.sentence = sentence;
           word.sentenceTrans = sentenceTrans;
+          word.sentencePhonetic = sentencePhonetic;
           showToast('Đã lưu thay đổi từ vựng!');
         }
       } else {
@@ -1460,6 +1396,7 @@ button, a, input, textarea, label {
           meaning,
           sentence,
           sentenceTrans,
+          sentencePhonetic,
           isMemorized: false
         };
         currentDay.words.unshift(newWord);
