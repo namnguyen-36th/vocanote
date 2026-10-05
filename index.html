@@ -901,6 +901,7 @@
       }
 
       days.forEach((day, index) => {
+        if (!day || !day.id) return;
         const isActive = day.id === currentDayId;
         const btn = document.createElement('button');
         btn.onclick = () => selectDay(day.id);
@@ -920,8 +921,8 @@
         const shortLabel = titleParts[0] || `Day ${index + 1}`;
 
         btn.innerHTML = `
-          <span>${shortLabel}</span>
-          <span class="text-[10px] opacity-75">(${day.words.length})</span>
+        <span>${shortLabel}</span>
+        <span class="text-[10px] opacity-75">(${(day.words || []).length})</span>
         `;
         daysContainer.appendChild(btn);
       });
@@ -963,11 +964,12 @@
 
       const query = searchQuery.trim().toLowerCase();
       const filteredWords = currentDay.words.filter(w => {
+        if (!w) return false;  // ← THÊM DÒNG NÀY
         return (
-          w.term.toLowerCase().includes(query) ||
-          w.phonetic.toLowerCase().includes(query) ||
-          w.meaning.toLowerCase().includes(query) ||
-          w.sentence.toLowerCase().includes(query)
+          (w.term || '').toLowerCase().includes(query) ||
+          (w.phonetic || '').toLowerCase().includes(query) ||
+          (w.meaning || '').toLowerCase().includes(query) ||
+          (w.sentence || '').toLowerCase().includes(query)
         );
       });
 
@@ -1557,3 +1559,9 @@ ${word.sentenceTrans
 </body>
 
 </html>
+
+<!-- dùng khi web lỗi: firebase.database().ref('vocanotes').remove().then(()=> {
+  localStorage.clear();
+  sessionStorage.clear();
+  setTimeout(() => location.reload(), 1500);
+  });-->
