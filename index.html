@@ -702,6 +702,7 @@
     }
 
     // ✅ HÀM MERGE: gộp dữ liệu local + Firebase, ưu tiên giữ ngày mới nhất
+    // ✅ HÀM MERGE: Firebase là nguồn chính, chỉ thêm ngày MỚI từ local chưa có trên Firebase
     function mergeData(local, remote) {
       const result = { en: { days: [] }, cn: { days: [] } };
 
@@ -709,31 +710,26 @@
         const localDays = (local[lang] && local[lang].days) || [];
         const remoteDays = (remote[lang] && remote[lang].days) || [];
 
-        // Map theo id để tránh trùng
         const dayMap = new Map();
 
-        // Ưu tiên remote trước (vì là nguồn chính khi sync)
-        remoteDays.forEach(d => dayMap.set(d.id, JSON.parse(JSON.stringify(d))));
-
-        // Nếu local có ngày nào chưa có trên remote → thêm vào
-        localDays.forEach(d => {
-          if (!dayMap.has(d.id)) {
+        // ✅ Firebase là nguồn chính — dùng dữ liệu remote
+        remoteDays.forEach(d => {
+          if (d && d.id) {
             dayMap.set(d.id, JSON.parse(JSON.stringify(d)));
-          } else {
-            // Ngày đã có → merge words (tránh mất từ khi 2 bên cùng sửa)
-            const remoteDay = dayMap.get(d.id);
-            const wordMap = new Map();
-            (remoteDay.words || []).forEach(w => wordMap.set(w.id, w));
-            (d.words || []).forEach(w => {
-              if (!wordMap.has(w.id)) wordMap.set(w.id, w);
-            });
-            remoteDay.words = Array.from(wordMap.values());
+          }
+        });
+
+        // ✅ Chỉ thêm ngày từ local nếu ngày đó CHƯA có trên Firebase
+        // (trường hợp user vừa tạo ngày mới, chưa kịp push lên)
+        localDays.forEach(d => {
+          if (d && d.id && !dayMap.has(d.id)) {
+            dayMap.set(d.id, JSON.parse(JSON.stringify(d)));
           }
         });
 
         result[lang].days = Array.from(dayMap.values());
 
-        // Sắp xếp lại theo id (day-xxx với timestamp) để giữ thứ tự
+        // Sắp xếp theo timestamp trong id
         result[lang].days.sort((a, b) => {
           const aNum = parseInt((a.id || '').replace(/\D/g, '')) || 0;
           const bNum = parseInt((b.id || '').replace(/\D/g, '')) || 0;
@@ -1175,10 +1171,25 @@ ${word.sentenceTrans
 
       const word = currentDay.words.find(w => w.id === wordId);
       if (word) {
+        // ✅ Bật cờ trước khi sửa
+        isPushing = true;
+        if (pushTimeout) clearTimeout(pushTimeout);
+
         word.isMemorized = !word.isMemorized;
         saveDataLocal();
         renderVocabCards();
-        pushToFirebase();
+
+        // ✅ Push trực tiếp và đợi xong mới tắt cờ
+        DATA_REF.set(appData)
+          .then(() => {
+            pushTimeout = setTimeout(() => {
+              isPushing = false;
+            }, 1000);
+          })
+          .catch((err) => {
+            console.error('❌ Lỗi toggle:', err);
+            isPushing = false;
+          });
       }
     }
 
@@ -1262,8 +1273,24 @@ ${word.sentenceTrans
       renderUI();
 
       // Sau đó mới push lên Firebase
-      pushToFirebase();
+      // ✅ Bật cờ và push trực tiếp để đợi xong mới tắt cờ
+      isPushing = true;
+      if (pushTimeout) clearTimeout(pushTimeout);
+
+      DATA_REF.set(appData)
+        .then(() => {
+          console.log('✅ Đã lưu từ vựng lên Firebase');
+          pushTimeout = setTimeout(() => {
+            isPushing = false;
+          }, 1000);
+        })
+        .catch((err) => {
+          console.error('❌ Lỗi lưu từ:', err);
+          isPushing = false;
+          showToast('Lỗi đồng bộ!', false);
+        });
     }
+
 
     function deleteCurrentDay() {
       const days = appData[currentLang].days || [];
@@ -1277,13 +1304,32 @@ ${word.sentenceTrans
 
       const confirmed = window.confirm(`Bạn có chắc muốn xóa "${currentDay.title}" cùng toàn bộ từ vựng trong ngày này không?`);
       if (confirmed) {
+        // ✅ BẬT CỜ TRƯỚC khi sửa appData
+        isPushing = true;
+
+        // Xóa ngày khỏi appData
         appData[currentLang].days = days.filter(d => d.id !== currentDayId);
         currentDayId = appData[currentLang].days[0].id;
         saveDataLocal();
 
+        // Cập nhật UI ngay
         renderUI();
-        pushToFirebase();
-        showToast('Đã xóa ngày được chọn!');
+        showToast('Đã xóa ngày, đang đồng bộ...');
+
+        // ✅ Push lên Firebase rồi MỚI tắt cờ
+        DATA_REF.set(appData)
+          .then(() => {
+            console.log('✅ Đã xóa ngày trên Firebase');
+            // Đợi 1 giây trước khi tắt cờ để chắc chắn listener không ghi đè
+            setTimeout(() => {
+              isPushing = false;
+            }, 1000);
+          })
+          .catch((err) => {
+            console.error('❌ Lỗi xóa ngày:', err);
+            isPushing = false;
+            showToast('Lỗi đồng bộ, thử lại!', false);
+          });
       }
     }
 
@@ -1419,14 +1465,30 @@ ${word.sentenceTrans
       const currentDay = days.find(d => d.id === currentDayId);
       if (!currentDay) return;
 
+      // ✅ BẬT CỜ TRƯỚC KHI SỬA appData — chặn listener ghi đè
+      isPushing = true;
+      if (pushTimeout) clearTimeout(pushTimeout);
+
+      // Xóa từ khỏi appData local
       currentDay.words = currentDay.words.filter(w => w.id !== wordId);
       saveDataLocal();
-
       renderVocabCards();
       renderDaysNav();
-
-      pushToFirebase();
       showToast('Đã xóa từ vựng!');
+
+      // ✅ Push lên Firebase rồi mới tắt cờ
+      DATA_REF.set(appData)
+        .then(() => {
+          console.log('✅ Đã xóa từ trên Firebase');
+          pushTimeout = setTimeout(() => {
+            isPushing = false;
+          }, 1000);
+        })
+        .catch((err) => {
+          console.error('❌ Lỗi xóa từ:', err);
+          isPushing = false;
+          showToast('Lỗi đồng bộ!', false);
+        });
     }
 
     /* ============================================================
